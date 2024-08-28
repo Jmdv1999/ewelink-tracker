@@ -1,0 +1,20 @@
+{
+  "name": "ewelink-monitor",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "region" : "node region.js"
+  },
+  "type": "module",
+  "keywords": [],
+  "author": "Jose Delgado",
+  "license": "ISC",
+  "description": "BOT de telegram para monitorear status de dispositivos ewelink",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ewelink-api": "^3.1.1",
+    "node-telegram-bot-api": "^0.66.0"
+  }
+}
