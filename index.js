@@ -1,18 +1,12 @@
-//Importamos dontenv para poder leer las variables de el archivo .env
 import "dotenv/config";
-
-// Importamos la librería de telegram
-import TelegramBot from "node-telegram-bot-api";
-
-//Importamos la libreria de ewelink
 import ewelink from "ewelink-api";
-// Creamos una constante que guarda el Token de nuestro Bot de Telegram que previamente hemos creado desde el bot @BotFather
-const token = process.env.TELEGRAM_BOT_API_KEY;
+import express from "express"; 
+import { Server } from "socket.io";
 
-// Create a bot that uses 'polling' to fetch new updates
-const bot = new TelegramBot(token, { polling: true });
+const app = express();
+const port = 3000;
 
-//Cramos la conexion con el ewelink
+// Crear la conexión con ewelink
 const connection = new ewelink({
   email: process.env.EWELINK_EMAIL,
   password: process.env.EWELINK_PASSWORD,
@@ -21,35 +15,33 @@ const connection = new ewelink({
   APP_SECRET: process.env.EWELINK_APP_SECRET,
 });
 
-// Después de este comentario es donde ponemos la lógica de nuestro bot donde podemos crear los comandos y eventos para darle funcionalidades a nuestro bot
-const chatId = process.env.TELEGRAM_GROUP_CHAT_ID;
+// Configurar servidor HTTP y WebSocket
+const server = app.listen(port, () => {
+  console.log(`Example app listening on port ${port}`);
+});
 
-bot.onText(/\/status/, async (msg) => {
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
 
-  
-  
-  //const chatId = msg.chat.id; //!Use this is dont have a group in telegram //!Use este si no tiene un grupo de telegram
+app.get('/', async (req, res) => {
   try {
     const devices = await connection.getDevices();
-    //console.log(devices);
-    let response = "Estado de tus dispositivos:\n\n";
+    let response = {};
 
     devices.forEach((device) => {
       const status = device.online === true ? "Encendido" : "Apagado";
-      //console.log(device.params)
-      response += `${device.name}: ${status}\n`;
+      response[device.name] = status;
     });
 
-    bot.sendMessage(chatId, response);
+    res.json(response);
   } catch (error) {
     console.log(error);
-    bot.sendMessage(
-      chatId,
-      "Hubo un error al obtener el estado de los dispositivos."
-    );
+    res.status(500).json({ error: "Hubo un error" });
   }
 });
-
 
 let previousDeviceStates = {};
 
@@ -61,12 +53,11 @@ async function checkDeviceStateChanges() {
       const deviceId = device.deviceid;
       const currentState = device.online === true ? "Encendido" : "Apagado";
       const previousState = previousDeviceStates[deviceId] || "Desconocido";
-      console.log(`Dispositivo: ${device.name} Estado Actual: ${currentState} Estado Anterior: ${previousState}`)
+
       if (currentState !== previousState) {
-        // Cambio detectado, envía un mensaje de Telegram
-        console.log(`¡Atención! El dispositivo ${device.name} cambió su estado a ${currentState} Estado Anterior: ${previousState}.`)
-        const message = `¡Atención! El dispositivo ${device.name} cambió su estado a ${currentState}.`;
-        bot.sendMessage(chatId, message);
+        // Cambio detectado, envía una señal a través de socket
+        console.log(`¡Atención! El dispositivo ${device.name} cambió su estado a ${currentState} Estado Anterior: ${previousState}.`);
+        io.emit('statusChange', { device: device.name, status: currentState, previousStatus: previousState });
       }
 
       // Actualiza el estado anterior
@@ -77,6 +68,5 @@ async function checkDeviceStateChanges() {
   }
 }
 
-setInterval(checkDeviceStateChanges, 5000)// Llama a la función cada 5 minutos (ajusta según tus necesidades)
-
-//setInterval(checkDeviceStateChanges, 1 * 60 * 1000);
+// Llama a la función cada 5 segundos
+setInterval(checkDeviceStateChanges, 5000);
